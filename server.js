@@ -97,12 +97,16 @@ app.get('/api/shop', async (req, res) => {
   }
 });
 
-app.post('/api/shop', async (req, res) => {
+app.post('/api/theme', async (req, res) => {
   try {
-    const {name, description, cost, stock, icon} = req.body;
-    await db.query('INSERT INTO shop_items (name, description, cost, stock, icon, active) VALUES (?,?,?,?,?,1)', [name, description||'', cost, stock||-1, icon||'']);
+    const cleanData = JSON.parse(JSON.stringify(req.body, (key, value) => {
+      if(typeof value === 'string') return value.replace(/[^\x00-\x7F]/g, '');
+      return value;
+    }));
+    await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(cleanData), JSON.stringify(cleanData)]);
     res.json({success: true});
   } catch(e) {
+    console.error('Theme save error:', e.message);
     res.status(500).json({error: e.message});
   }
 });
