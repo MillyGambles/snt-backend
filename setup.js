@@ -10,8 +10,8 @@ async function setup(){
     database: process.env.DB_NAME,
     ssl:      {rejectUnauthorized:false}
   });
-  await db.query('CREATE TABLE IF NOT EXISTS settings (key_name VARCHAR(100) PRIMARY KEY, value TEXT)');
-  console.log('✅ Settings table created!');
+  await db.query('ALTER TABLE settings MODIFY value LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+  console.log('✅ Fixed!');
   process.exit();
 }
 
