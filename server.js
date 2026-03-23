@@ -180,7 +180,8 @@ app.patch('/api/claims/:id', async (req, res) => {
 // ─── Users ────────────────────────────────────────────────────────────────────
 app.patch('/api/users/:id', async (req, res) => {
   try {
-    await db.query('UPDATE users SET points=? WHERE id=?', [req.body.points, req.params.id]);
+    if(req.body.points !== undefined) await db.query('UPDATE users SET points=? WHERE id=?', [req.body.points, req.params.id]);
+    if(req.body.total_invites !== undefined) await db.query('UPDATE users SET total_invites=? WHERE id=?', [req.body.total_invites, req.params.id]);
     res.json({success: true});
   } catch(e) {
     res.status(500).json({error: e.message});
