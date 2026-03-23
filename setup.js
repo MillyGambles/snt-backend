@@ -8,8 +8,10 @@ async function setup(){
     user:     process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    ssl:      {rejectUnauthorized:false}
+    ssl:      {rejectUnauthorized:false},
+    charset:  'utf8mb4'
   });
+  await db.query('ALTER TABLE settings CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
   await db.query('ALTER TABLE settings MODIFY value LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
   console.log('✅ Fixed!');
   process.exit();
