@@ -203,9 +203,10 @@ app.get('/api/theme', async (req, res) => {
 
 app.post('/api/theme', async (req, res) => {
   try {
-    await db.query('INSERT INTO settings (key_name, value) VALUES ("theme",?) ON DUPLICATE KEY UPDATE value=?', [JSON.stringify(req.body), JSON.stringify(req.body)]);
+    await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(req.body), JSON.stringify(req.body)]);
     res.json({success: true});
   } catch(e) {
+    console.error('Theme save error:', e.message);
     res.status(500).json({error: e.message});
   }
 });
