@@ -19,7 +19,7 @@ const db = mysql.createPool({
   ssl:      {rejectUnauthorized: false},
   charset:  'utf8mb4',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 2,
 });
 
 app.use(session({
@@ -97,16 +97,12 @@ app.get('/api/shop', async (req, res) => {
   }
 });
 
-app.post('/api/theme', async (req, res) => {
+app.post('/api/shop', async (req, res) => {
   try {
-    const cleanData = JSON.parse(JSON.stringify(req.body, (key, value) => {
-      if(typeof value === 'string') return value.replace(/[^\x00-\x7F]/g, '');
-      return value;
-    }));
-    await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(cleanData), JSON.stringify(cleanData)]);
+    const {name, description, cost, stock, icon} = req.body;
+    await db.query('INSERT INTO shop_items (name, description, cost, stock, icon, active) VALUES (?,?,?,?,?,1)', [name, description||'', cost, stock||-1, icon||'']);
     res.json({success: true});
   } catch(e) {
-    console.error('Theme save error:', e.message);
     res.status(500).json({error: e.message});
   }
 });
@@ -168,6 +164,16 @@ app.get('/api/claims', async (req, res) => {
   }
 });
 
+app.post('/api/claims', async (req, res) => {
+  try {
+    const {user_id, item_id} = req.body;
+    await db.query('INSERT INTO claims (user_id, item_id) VALUES (?,?)', [user_id, item_id]);
+    res.json({success: true});
+  } catch(e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
 app.patch('/api/claims/:id', async (req, res) => {
   try {
     await db.query('UPDATE claims SET status=? WHERE id=?', [req.body.status, req.params.id]);
@@ -178,6 +184,15 @@ app.patch('/api/claims/:id', async (req, res) => {
 });
 
 // ─── Users ────────────────────────────────────────────────────────────────────
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM users WHERE id=?', [req.params.id]);
+    res.json(rows[0] || {});
+  } catch(e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
 app.patch('/api/users/:id', async (req, res) => {
   try {
     if(req.body.points !== undefined) await db.query('UPDATE users SET points=? WHERE id=?', [req.body.points, req.params.id]);
@@ -209,7 +224,11 @@ app.get('/api/theme', async (req, res) => {
 
 app.post('/api/theme', async (req, res) => {
   try {
-    await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(req.body), JSON.stringify(req.body)]);
+    const cleanData = JSON.parse(JSON.stringify(req.body, (key, value) => {
+      if(typeof value === 'string') return value.replace(/[^\x00-\x7F]/g, '');
+      return value;
+    }));
+    await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(cleanData), JSON.stringify(cleanData)]);
     res.json({success: true});
   } catch(e) {
     console.error('Theme save error:', e.message);
