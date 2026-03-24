@@ -224,10 +224,12 @@ app.get('/api/theme', async (req, res) => {
 
 app.post('/api/theme', async (req, res) => {
   try {
+    console.log('Theme received:', JSON.stringify(req.body).substring(0,100));
     const cleanData = JSON.parse(JSON.stringify(req.body, (key, value) => {
       if(typeof value === 'string') return value.replace(/[^\x00-\x7F]/g, '');
       return value;
     }));
+    console.log('Theme clean accent:', cleanData.accent);
     await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(cleanData), JSON.stringify(cleanData)]);
     res.json({success: true});
   } catch(e) {
