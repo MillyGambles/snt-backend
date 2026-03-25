@@ -197,6 +197,7 @@ app.patch('/api/users/:id', async (req, res) => {
   try {
     if(req.body.points !== undefined) await db.query('UPDATE users SET points=? WHERE id=?', [req.body.points, req.params.id]);
     if(req.body.total_invites !== undefined) await db.query('UPDATE users SET total_invites=? WHERE id=?', [req.body.total_invites, req.params.id]);
+    await checkAndAwardBadges(req.params.id);
     res.json({success: true});
   } catch(e) {
     res.status(500).json({error: e.message});
@@ -281,6 +282,66 @@ app.delete('/api/announcements/:id', async (req, res) => {
   } catch(e) {
     res.status(500).json({error: e.message});
   }
+});
+
+app.get('/api/claims/user/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT c.*, s.name as item_name, s.icon FROM claims c JOIN shop_items s ON c.item_id=s.id WHERE c.user_id=? ORDER BY c.claimed_at DESC',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch(e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+// ─── BADGES & PROFILE ─────────────────────────────────────────────────────────
+const BADGE_DEFS = [
+  {key:'first_invite',label:'First Blood',desc:'Got your first invite',emoji:'🩸',req:function(u){return u.total_invites>=1;}},
+  {key:'invites_5',label:'Getting Started',desc:'5 invites',emoji:'🌱',req:function(u){return u.total_invites>=5;}},
+  {key:'invites_10',label:'Recruiter',desc:'10 invites',emoji:'📣',req:function(u){return u.total_invites>=10;}},
+  {key:'invites_25',label:'Grinder',desc:'25 invites',emoji:'⚙️',req:function(u){return u.total_invites>=25;}},
+  {key:'invites_50',label:'SNT Soldier',desc:'50 invites',emoji:'🎖️',req:function(u){return u.total_invites>=50;}},
+  {key:'invites_100',label:'Legend',desc:'100 invites',emoji:'👑',req:function(u){return u.total_invites>=100;}},
+  {key:'points_1000',label:'Stack Up',desc:'Reached 1,000 points',emoji:'💰',req:function(u){return u.points>=1000;}},
+  {key:'points_5000',label:'Big Bag',desc:'Reached 5,000 points',emoji:'💎',req:function(u){return u.points>=5000;}},
+  {key:'points_10000',label:'Whale',desc:'Reached 10,000 points',emoji:'🐋',req:function(u){return u.points>=10000;}},
+  {key:'og',label:'OG',desc:'One of the first 10 members',emoji:'🏆',req:function(u){return false;}},
+];
+
+async function checkAndAwardBadges(userId){
+  try {
+    const [[user]] = await db.query('SELECT * FROM users WHERE id=?',[userId]);
+    if(!user) return;
+    for(const b of BADGE_DEFS){
+      if(b.req(user)){
+        await db.query('INSERT IGNORE INTO badges (user_id,badge_key) VALUES (?,?)',[userId,b.key]);
+      }
+    }
+  } catch(e){}
+}
+
+app.get('/api/profile/:id', async (req, res) => {
+  try {
+    const [[user]] = await db.query('SELECT id,username,avatar,points,total_invites,joined_at,profile_public FROM users WHERE id=?',[req.params.id]);
+    if(!user) return res.status(404).json({error:'User not found'});
+    await checkAndAwardBadges(req.params.id);
+    const [badges] = await db.query('SELECT badge_key,awarded_at FROM badges WHERE user_id=?',[req.params.id]);
+    const [claims] = await db.query('SELECT c.*,s.name as item_name,s.icon FROM claims c JOIN shop_items s ON c.item_id=s.id WHERE c.user_id=? ORDER BY c.claimed_at DESC',[req.params.id]);
+    const [allUsers] = await db.query('SELECT id FROM users ORDER BY total_invites DESC');
+    const invRank = allUsers.findIndex(u=>u.id==req.params.id)+1;
+    const [allPts] = await db.query('SELECT id FROM users ORDER BY points DESC');
+    const ptsRank = allPts.findIndex(u=>u.id==req.params.id)+1;
+    res.json({user,badges:badges.map(b=>b.badge_key),claims,invRank,ptsRank});
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.patch('/api/profile/:id/privacy', async (req, res) => {
+  try {
+    await db.query('UPDATE users SET profile_public=? WHERE id=?',[req.body.public?1:0,req.params.id]);
+    res.json({success:true});
+  } catch(e){res.status(500).json({error:e.message});}
 });
 
 app.listen(process.env.PORT || 3000, () => {
