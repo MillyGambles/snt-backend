@@ -168,6 +168,10 @@ app.post('/api/claims', async (req, res) => {
   try {
     const {user_id, item_id} = req.body;
     await db.query('INSERT INTO claims (user_id, item_id) VALUES (?,?)', [user_id, item_id]);
+    const [[claimUser]] = await db.query('SELECT username, avatar FROM users WHERE id=?', [user_id]);
+    const [[claimItem]] = await db.query('SELECT name FROM shop_items WHERE id=?', [item_id]);
+    if(claimUser && claimItem) await db.query('INSERT INTO activity_feed (type,user_id,username,avatar,message) VALUES (?,?,?,?,?)',
+      ['claim', user_id, claimUser.username, claimUser.avatar||'', claimUser.username+' claimed '+claimItem.name+' 🎁']);
     res.json({success: true});
   } catch(e) {
     res.status(500).json({error: e.message});
@@ -316,7 +320,11 @@ async function checkAndAwardBadges(userId){
     if(!user) return;
     for(const b of BADGE_DEFS){
       if(b.req(user)){
-        await db.query('INSERT IGNORE INTO badges (user_id,badge_key) VALUES (?,?)',[userId,b.key]);
+        const [result] = await db.query('INSERT IGNORE INTO badges (user_id,badge_key) VALUES (?,?)',[userId,b.key]);
+        if(result.affectedRows>0){
+          await db.query('INSERT INTO activity_feed (type,user_id,username,avatar,message) VALUES (?,?,?,?,?)',
+            ['badge',userId,user.username,user.avatar||'',user.username+' unlocked the '+b.label+' badge '+b.emoji]);
+        }
       }
     }
   } catch(e){}
@@ -381,6 +389,41 @@ app.post('/api/equipped/:id', async (req, res) => {
   try {
     const keys = req.body.badge_keys||'';
     await db.query('INSERT INTO equipped_badges (user_id, badge_keys) VALUES (?,?) ON DUPLICATE KEY UPDATE badge_keys=?', [req.params.id, keys, keys]);
+    res.json({success: true});
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+// ─── ACTIVITY FEED ────────────────────────────────────────────────────────────
+app.get('/api/activity', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM activity_feed ORDER BY created_at DESC LIMIT 30');
+    res.json(rows);
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.post('/api/activity', async (req, res) => {
+  try {
+    const {type, user_id, username, avatar, message} = req.body;
+    await db.query('INSERT INTO activity_feed (type, user_id, username, avatar, message) VALUES (?,?,?,?,?)', [type, user_id, username, avatar||'', message]);
+    // keep only last 100 entries
+    await db.query('DELETE FROM activity_feed WHERE id NOT IN (SELECT id FROM (SELECT id FROM activity_feed ORDER BY created_at DESC LIMIT 100) t)');
+    res.json({success: true});
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+// ─── ACTIVITY FEED ────────────────────────────────────────────────────────────
+app.get('/api/activity', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM activity_feed ORDER BY created_at DESC LIMIT 30');
+    res.json(rows);
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.post('/api/activity', async (req, res) => {
+  try {
+    const {type, user_id, username, avatar, message} = req.body;
+    await db.query('INSERT INTO activity_feed (type, user_id, username, avatar, message) VALUES (?,?,?,?,?)', [type, user_id, username, avatar||'', message]);
+    await db.query('DELETE FROM activity_feed WHERE id NOT IN (SELECT id FROM (SELECT id FROM activity_feed ORDER BY created_at DESC LIMIT 100) t)');
     res.json({success: true});
   } catch(e) { res.status(500).json({error: e.message}); }
 });
