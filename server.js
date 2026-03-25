@@ -215,26 +215,40 @@ app.delete('/api/users/:id', async (req, res) => {
 app.get('/api/theme', async (req, res) => {
   try {
     const [rows] = await db.query("SELECT * FROM settings WHERE key_name='theme'");
-    console.log('Theme GET rows:', rows.length, rows[0]?.key_name);
     res.json(rows[0] ? JSON.parse(rows[0].value) : {});
   } catch(e) {
-    console.error('Theme GET error:', e.message);
     res.json({});
   }
 });
 
 app.post('/api/theme', async (req, res) => {
   try {
-    console.log('Theme received:', JSON.stringify(req.body).substring(0,100));
     const cleanData = JSON.parse(JSON.stringify(req.body, (key, value) => {
       if(typeof value === 'string') return value.replace(/[^\x00-\x7F]/g, '');
       return value;
     }));
-    console.log('Theme clean accent:', cleanData.accent);
     await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', ['theme', JSON.stringify(cleanData), JSON.stringify(cleanData)]);
     res.json({success: true});
   } catch(e) {
-    console.error('Theme save error:', e.message);
+    res.status(500).json({error: e.message});
+  }
+});
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+app.get('/api/settings/:key', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM settings WHERE key_name=?", [req.params.key]);
+    res.json(rows[0] ? JSON.parse(rows[0].value) : {});
+  } catch(e) {
+    res.json({});
+  }
+});
+
+app.post('/api/settings/:key', async (req, res) => {
+  try {
+    await db.query('INSERT INTO settings (key_name, value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?', [req.params.key, JSON.stringify(req.body), JSON.stringify(req.body)]);
+    res.json({success: true});
+  } catch(e) {
     res.status(500).json({error: e.message});
   }
 });
