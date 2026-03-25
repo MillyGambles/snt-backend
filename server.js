@@ -214,7 +214,7 @@ app.delete('/api/users/:id', async (req, res) => {
 // ─── Theme ────────────────────────────────────────────────────────────────────
 app.get('/api/theme', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM settings WHERE key_name="theme"');
+    const [rows] = await db.query("SELECT * FROM settings WHERE key_name='theme'");
     console.log('Theme GET rows:', rows.length, rows[0]?.key_name);
     res.json(rows[0] ? JSON.parse(rows[0].value) : {});
   } catch(e) {
