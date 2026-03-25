@@ -254,6 +254,35 @@ app.post('/api/settings/:key', async (req, res) => {
   }
 });
 
+// ─── Announcements ────────────────────────────────────────────────────────────
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM announcements ORDER BY created_at DESC LIMIT 20');
+    res.json(rows);
+  } catch(e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+app.post('/api/announcements', async (req, res) => {
+  try {
+    const {title, content} = req.body;
+    await db.query('INSERT INTO announcements (title, content) VALUES (?,?)', [title, content||'']);
+    res.json({success: true});
+  } catch(e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+app.delete('/api/announcements/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM announcements WHERE id=?', [req.params.id]);
+    res.json({success: true});
+  } catch(e) {
+    res.status(500).json({error: e.message});
+  }
+});
+
 app.listen(process.env.PORT || 3000, () => {
   console.log(`✅ Server running on http://localhost:${process.env.PORT || 3000}`);
 });
