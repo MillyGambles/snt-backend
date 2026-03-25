@@ -52,6 +52,7 @@ app.get('/auth/discord/callback',
     try {
       const [rows] = await db.query('SELECT * FROM users WHERE id = ?', [user.id]);
       const pts = rows[0] ? rows[0].points : 0;
+      if(user.avatar) await db.query('UPDATE users SET avatar=? WHERE id=?', [user.avatar, user.id]).catch(()=>{});
       res.redirect(`${process.env.FRONTEND_URL}?discord_id=${user.id}&username=${encodeURIComponent(user.username)}&avatar=${user.avatar}&pts=${pts}`);
     } catch(e) {
       res.redirect(process.env.FRONTEND_URL);
@@ -67,7 +68,7 @@ app.get('/auth/logout', (req, res) => {
 // ─── Leaderboard ─────────────────────────────────────────────────────────────
 app.get('/api/leaderboard', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT id, username, points, total_invites FROM users ORDER BY points DESC LIMIT 50');
+    const [rows] = await db.query('SELECT id, username, avatar, points, total_invites FROM users ORDER BY points DESC LIMIT 50');
     res.json(rows);
   } catch(e) {
     res.status(500).json({error: e.message});
