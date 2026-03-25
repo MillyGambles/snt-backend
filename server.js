@@ -333,7 +333,9 @@ app.get('/api/profile/:id', async (req, res) => {
     const invRank = allUsers.findIndex(u=>u.id==req.params.id)+1;
     const [allPts] = await db.query('SELECT id FROM users ORDER BY points DESC');
     const ptsRank = allPts.findIndex(u=>u.id==req.params.id)+1;
-    res.json({user,badges:badges.map(b=>b.badge_key),claims,invRank,ptsRank});
+    const [roles] = await db.query('SELECT role_name,color FROM user_roles WHERE user_id=?',[req.params.id]);
+const [[equipped]] = await db.query('SELECT badge_keys FROM equipped_badges WHERE user_id=?',[req.params.id]);
+res.json({user,badges:badges.map(b=>b.badge_key),claims,invRank,ptsRank,roles,equippedBadges:equipped?equipped.badge_keys:''});
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -342,6 +344,45 @@ app.patch('/api/profile/:id/privacy', async (req, res) => {
     await db.query('UPDATE users SET profile_public=? WHERE id=?',[req.body.public?1:0,req.params.id]);
     res.json({success:true});
   } catch(e){res.status(500).json({error:e.message});}
+});
+
+// ─── ROLES ────────────────────────────────────────────────────────────────────
+app.get('/api/roles/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM user_roles WHERE user_id=?', [req.params.id]);
+    res.json(rows);
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.post('/api/roles', async (req, res) => {
+  try {
+    const {user_id, role_name, color} = req.body;
+    await db.query('INSERT IGNORE INTO user_roles (user_id, role_name, color) VALUES (?,?,?)', [user_id, role_name, color||'#3b82f6']);
+    res.json({success: true});
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.delete('/api/roles/:userId/:roleName', async (req, res) => {
+  try {
+    await db.query('DELETE FROM user_roles WHERE user_id=? AND role_name=?', [req.params.userId, req.params.roleName]);
+    res.json({success: true});
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+// ─── EQUIPPED BADGES ──────────────────────────────────────────────────────────
+app.get('/api/equipped/:id', async (req, res) => {
+  try {
+    const [[row]] = await db.query('SELECT badge_keys FROM equipped_badges WHERE user_id=?', [req.params.id]);
+    res.json({badge_keys: row ? row.badge_keys : ''});
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.post('/api/equipped/:id', async (req, res) => {
+  try {
+    const keys = req.body.badge_keys||'';
+    await db.query('INSERT INTO equipped_badges (user_id, badge_keys) VALUES (?,?) ON DUPLICATE KEY UPDATE badge_keys=?', [req.params.id, keys, keys]);
+    res.json({success: true});
+  } catch(e) { res.status(500).json({error: e.message}); }
 });
 
 app.listen(process.env.PORT || 3000, () => {
