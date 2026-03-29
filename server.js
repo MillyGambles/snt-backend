@@ -312,6 +312,7 @@ const BADGE_DEFS = [
   {key:'points_5000',label:'Big Bag',desc:'Reached 5,000 points',emoji:'💎',req:function(u){return u.points>=5000;}},
   {key:'points_10000',label:'Whale',desc:'Reached 10,000 points',emoji:'🐋',req:function(u){return u.points>=10000;}},
   {key:'og',label:'OG',desc:'One of the first 10 members',emoji:'🏆',req:function(u){return false;}},
+  {key:'donator',label:'Donator',desc:'Supported SNT with a donation',emoji:'💸',req:function(u){return false;}},
 ];
 
 async function checkAndAwardBadges(userId){
@@ -450,6 +451,58 @@ app.post('/api/bot/settings', async (req, res) => {
           [k, JSON.stringify(req.body[k]), JSON.stringify(req.body[k])]);
       }
     }
+    res.json({success:true});
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+// ─── DONATIONS ────────────────────────────────────────────────────────────────
+app.get('/api/donations', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM donations ORDER BY amount_usd DESC LIMIT 50');
+    res.json(rows);
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.post('/api/donations', async (req, res) => {
+  try {
+    const {user_id, username, amount_usd, crypto, tx_hash, note} = req.body;
+    await db.query('INSERT INTO donations (user_id, username, amount_usd, crypto, tx_hash, note) VALUES (?,?,?,?,?,?)',
+      [user_id||null, username, amount_usd, crypto||'', tx_hash||'', note||'']);
+    // award donator badge if user_id exists
+    if(user_id){
+      await db.query('INSERT IGNORE INTO badges (user_id, badge_key) VALUES (?,?)', [user_id, 'donator']);
+      await db.query('INSERT INTO activity_feed (type,user_id,username,avatar,message) VALUES (?,?,?,?,?)',
+        ['donate', user_id, username, '', username+' made a donation 💸']);
+    }
+    res.json({success:true});
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.delete('/api/donations/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM donations WHERE id=?', [req.params.id]);
+    res.json({success:true});
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.get('/api/donation-addresses', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM donation_addresses ORDER BY id ASC');
+    res.json(rows);
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.post('/api/donation-addresses', async (req, res) => {
+  try {
+    const {crypto, address, label} = req.body;
+    await db.query('INSERT INTO donation_addresses (crypto, address, label) VALUES (?,?,?)', [crypto, address, label||crypto]);
+    res.json({success:true});
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.delete('/api/donation-addresses/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM donation_addresses WHERE id=?', [req.params.id]);
     res.json({success:true});
   } catch(e){ res.status(500).json({error:e.message}); }
 });
