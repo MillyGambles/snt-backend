@@ -428,6 +428,32 @@ app.post('/api/activity', async (req, res) => {
   } catch(e) { res.status(500).json({error: e.message}); }
 });
 
+// ─── BOT CONTROLS ─────────────────────────────────────────────────────────────
+app.get('/api/bot/settings', async (req, res) => {
+  try {
+    const keys = ['bot_ai_enabled','bot_prompt','bot_welcome_enabled','bot_milestones_enabled','bot_allowed_channels'];
+    const result = {};
+    for(const k of keys){
+      const [rows] = await db.query('SELECT value FROM settings WHERE key_name=?',[k]);
+      result[k] = rows[0] ? JSON.parse(rows[0].value) : null;
+    }
+    res.json(result);
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+app.post('/api/bot/settings', async (req, res) => {
+  try {
+    const allowed = ['bot_ai_enabled','bot_prompt','bot_welcome_enabled','bot_milestones_enabled','bot_allowed_channels'];
+    for(const k of allowed){
+      if(req.body[k] !== undefined){
+        await db.query('INSERT INTO settings (key_name,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?',
+          [k, JSON.stringify(req.body[k]), JSON.stringify(req.body[k])]);
+      }
+    }
+    res.json({success:true});
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
 app.listen(process.env.PORT || 3000, () => {
   console.log(`✅ Server running on http://localhost:${process.env.PORT || 3000}`);
 });
