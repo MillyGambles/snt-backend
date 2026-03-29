@@ -458,17 +458,17 @@ app.post('/api/bot/settings', async (req, res) => {
 // ─── DONATIONS ────────────────────────────────────────────────────────────────
 app.get('/api/donations', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM donations ORDER BY amount_usd DESC LIMIT 50');
-    res.json(rows);
+    const [crypto] = await db.query("SELECT * FROM donations WHERE donation_type='crypto' ORDER BY amount_usd DESC LIMIT 50");
+    const [robux] = await db.query("SELECT * FROM donations WHERE donation_type='robux' ORDER BY amount_robux DESC LIMIT 50");
+    res.json({crypto, robux});
   } catch(e){ res.status(500).json({error:e.message}); }
 });
 
 app.post('/api/donations', async (req, res) => {
   try {
-    const {user_id, username, amount_usd, crypto, tx_hash, note} = req.body;
-    await db.query('INSERT INTO donations (user_id, username, amount_usd, crypto, tx_hash, note) VALUES (?,?,?,?,?,?)',
-      [user_id||null, username, amount_usd, crypto||'', tx_hash||'', note||'']);
-    // award donator badge if user_id exists
+    const {user_id, username, amount_usd, amount_robux, crypto, tx_hash, note, donation_type} = req.body;
+    await db.query('INSERT INTO donations (user_id, username, amount_usd, amount_robux, crypto, tx_hash, note, donation_type) VALUES (?,?,?,?,?,?,?,?)',
+      [user_id||null, username, amount_usd||0, amount_robux||0, crypto||'', tx_hash||'', note||'', donation_type||'crypto']);
     if(user_id){
       await db.query('INSERT IGNORE INTO badges (user_id, badge_key) VALUES (?,?)', [user_id, 'donator']);
       await db.query('INSERT INTO activity_feed (type,user_id,username,avatar,message) VALUES (?,?,?,?,?)',
