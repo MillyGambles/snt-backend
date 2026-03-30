@@ -99,8 +99,9 @@ app.get('/api/shop', async (req, res) => {
 
 app.post('/api/shop', async (req, res) => {
   try {
-    const {name, description, cost, stock, icon} = req.body;
-    await db.query('INSERT INTO shop_items (name, description, cost, stock, icon, active) VALUES (?,?,?,?,?,1)', [name, description||'', cost, stock||-1, icon||'']);
+    const {name, description, cost, stock, icon, item_type, discord_role_id, role_color} = req.body;
+    await db.query('INSERT INTO shop_items (name, description, cost, stock, icon, active, item_type, discord_role_id, role_color) VALUES (?,?,?,?,?,1,?,?,?)',
+      [name, description||'', cost, stock||-1, icon||'', item_type||'reward', discord_role_id||null, role_color||'#3b82f6']);
     res.json({success: true});
   } catch(e) {
     res.status(500).json({error: e.message});
@@ -167,12 +168,24 @@ app.get('/api/claims', async (req, res) => {
 
 app.post('/api/claims', async (req, res) => {
   try {
-    const {user_id, item_id} = req.body;
-    await db.query('INSERT INTO claims (user_id, item_id) VALUES (?,?)', [user_id, item_id]);
+    const {user_id, item_id, gifted_to_id, gifted_to_name} = req.body;
+    const recipient_id = gifted_to_id || user_id;
+    await db.query('INSERT INTO claims (user_id, item_id, gifted_to_id, gifted_to_name) VALUES (?,?,?,?)',
+      [user_id, item_id, gifted_to_id||null, gifted_to_name||null]);
     const [[claimUser]] = await db.query('SELECT username, avatar FROM users WHERE id=?', [user_id]);
-    const [[claimItem]] = await db.query('SELECT name FROM shop_items WHERE id=?', [item_id]);
-    if(claimUser && claimItem) await db.query('INSERT INTO activity_feed (type,user_id,username,avatar,message) VALUES (?,?,?,?,?)',
-      ['claim', user_id, claimUser.username, claimUser.avatar||'', claimUser.username+' claimed '+claimItem.name+' 🎁']);
+    const [[claimItem]] = await db.query('SELECT name, item_type, discord_role_id FROM shop_items WHERE id=?', [item_id]);
+    if(claimUser && claimItem){
+      await db.query('INSERT INTO activity_feed (type,user_id,username,avatar,message) VALUES (?,?,?,?,?)',
+        ['claim', user_id, claimUser.username, claimUser.avatar||'',
+          gifted_to_name ? claimUser.username+' gifted '+claimItem.name+' to '+gifted_to_name+' 🎁'
+          : claimUser.username+' claimed '+claimItem.name+' 🎁']);
+      if(claimItem.item_type==='role' && claimItem.discord_role_id){
+        await db.query('INSERT INTO settings (key_name,value) VALUES (?,?) ON DUPLICATE KEY UPDATE value=?',
+          ['pending_role_'+recipient_id,
+           JSON.stringify({user_id:recipient_id, role_id:claimItem.discord_role_id, item:claimItem.name}),
+           JSON.stringify({user_id:recipient_id, role_id:claimItem.discord_role_id, item:claimItem.name})]);
+      }
+    }
     res.json({success: true});
   } catch(e) {
     res.status(500).json({error: e.message});
@@ -505,6 +518,18 @@ app.get('/api/events/:id/leaderboard', async (req, res) => {
     sql += ' GROUP BY il.inviter_id ORDER BY invites DESC LIMIT 3';
     const [rows] = await db.query(sql, params);
     res.json(rows);
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+// ─── PENDING ROLES ────────────────────────────────────────────────────────────
+app.get('/api/pending-roles/:userId', async (req, res) => {
+  try {
+    const [rows] = await db.query("SELECT key_name, value FROM settings WHERE key_name=?",
+      ['pending_role_'+req.params.userId]);
+    if(!rows.length) return res.json(null);
+    const data = JSON.parse(rows[0].value);
+    await db.query("DELETE FROM settings WHERE key_name=?", ['pending_role_'+req.params.userId]);
+    res.json(data);
   } catch(e){ res.status(500).json({error:e.message}); }
 });
 
