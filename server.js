@@ -137,8 +137,9 @@ app.get('/api/events', async (req, res) => {
 
 app.post('/api/events', async (req, res) => {
   try {
-    const {title, status, description, date, prizes} = req.body;
-    await db.query('INSERT INTO events (title, status, description, date, prizes) VALUES (?,?,?,?,?)', [title, status, description||'', date||'TBA', JSON.stringify(prizes||[])]);
+    const {title, status, description, date, prizes, start_date, end_date} = req.body;
+    await db.query('INSERT INTO events (title, status, description, date, prizes, start_date, end_date) VALUES (?,?,?,?,?,?,?)',
+      [title, status, description||'', date||'TBA', JSON.stringify(prizes||[]), start_date||null, end_date||null]);
     res.json({success: true});
   } catch(e) {
     res.status(500).json({error: e.message});
@@ -412,23 +413,6 @@ app.post('/api/activity', async (req, res) => {
   } catch(e) { res.status(500).json({error: e.message}); }
 });
 
-// ─── ACTIVITY FEED ────────────────────────────────────────────────────────────
-app.get('/api/activity', async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT * FROM activity_feed ORDER BY created_at DESC LIMIT 30');
-    res.json(rows);
-  } catch(e) { res.status(500).json({error: e.message}); }
-});
-
-app.post('/api/activity', async (req, res) => {
-  try {
-    const {type, user_id, username, avatar, message} = req.body;
-    await db.query('INSERT INTO activity_feed (type, user_id, username, avatar, message) VALUES (?,?,?,?,?)', [type, user_id, username, avatar||'', message]);
-    await db.query('DELETE FROM activity_feed WHERE id NOT IN (SELECT id FROM (SELECT id FROM activity_feed ORDER BY created_at DESC LIMIT 100) t)');
-    res.json({success: true});
-  } catch(e) { res.status(500).json({error: e.message}); }
-});
-
 // ─── BOT CONTROLS ─────────────────────────────────────────────────────────────
 app.get('/api/bot/settings', async (req, res) => {
   try {
@@ -504,6 +488,23 @@ app.delete('/api/donation-addresses/:id', async (req, res) => {
   try {
     await db.query('DELETE FROM donation_addresses WHERE id=?', [req.params.id]);
     res.json({success:true});
+  } catch(e){ res.status(500).json({error:e.message}); }
+});
+
+// ─── EVENT LEADERBOARD ────────────────────────────────────────────────────────
+app.get('/api/events/:id/leaderboard', async (req, res) => {
+  try {
+    const [[event]] = await db.query('SELECT * FROM events WHERE id=?', [req.params.id]);
+    if(!event) return res.status(404).json({error:'Event not found'});
+    let sql = 'SELECT u.id, u.username, u.avatar, COUNT(il.id) as invites FROM invite_log il JOIN users u ON il.inviter_id=u.id';
+    const params = [];
+    if(event.start_date && event.end_date){
+      sql += ' WHERE il.invited_at BETWEEN ? AND ?';
+      params.push(event.start_date, event.end_date);
+    }
+    sql += ' GROUP BY il.inviter_id ORDER BY invites DESC LIMIT 3';
+    const [rows] = await db.query(sql, params);
+    res.json(rows);
   } catch(e){ res.status(500).json({error:e.message}); }
 });
 
